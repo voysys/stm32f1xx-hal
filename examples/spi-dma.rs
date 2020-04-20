@@ -51,8 +51,8 @@ fn main() -> ! {
     // Start a DMA transfer
     let transfer = spi_dma.write(b"hello, world");
 
-    // Wait for it to finnish. The transfer takes ownership over the SPI device
-    // and the data being sent anb those things are returned by transfer.wait
+    // Wait for it to finish. The transfer takes ownership over the SPI device
+    // and the data being sent and those things are returned by transfer.wait
     let (_buffer, _spi_dma) = transfer.wait();
 
     loop {}

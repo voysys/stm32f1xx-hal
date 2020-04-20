@@ -13,6 +13,7 @@
 //!
 //! supported microcontrollers are:
 //!
+//! - stm32f107
 //! - stm32f103
 //! - stm32f101
 //! - stm32f100
@@ -139,6 +140,8 @@ pub mod flash;
 pub mod gpio;
 #[cfg(feature = "device-selected")]
 pub mod i2c;
+#[cfg(all(feature = "usb_fs", feature = "stm32f107"))]
+pub mod otg_fs;
 #[cfg(feature = "device-selected")]
 pub mod prelude;
 #[cfg(feature = "device-selected")]

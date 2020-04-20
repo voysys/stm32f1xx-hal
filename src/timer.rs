@@ -139,7 +139,6 @@ remap!(
     Tim2PartialRemap1: (TIM2, 0b01, PA15, PB3, PA2, PA3),
     Tim2PartialRemap2: (TIM2, 0b10, PA0, PA1, PB10, PB11),
     Tim2FullRemap: (TIM2, 0b11, PA15, PB3, PB10, PB11),
-
     Tim3NoRemap: (TIM3, 0b00, PA6, PA7, PB0, PB1),
     Tim3PartialRemap: (TIM3, 0b10, PB4, PB5, PB0, PB1),
     Tim3FullRemap: (TIM3, 0b11, PC6, PC7, PC8, PC9),

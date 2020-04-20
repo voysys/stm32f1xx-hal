@@ -1,11 +1,12 @@
 //! # Reset & Control Clock
 
+use crate::pac::GPIOA;
+use cast::u32;
 use core::cmp;
 
-use crate::pac::{rcc, PWR, RCC};
-use cast::u32;
-
 use crate::flash::ACR;
+use crate::pac;
+use crate::pac::{rcc, PWR, RCC};
 use crate::time::Hertz;
 
 use crate::backup_domain::BackupDomain;
@@ -392,6 +393,231 @@ impl CFGR {
             usbclk_valid,
         }
     }
+
+    #[cfg(feature = "stm32f107")]
+    pub fn freeze_explicit(
+        self,
+        acr: &mut ACR,
+        hse_frequency: u32,
+        hse_prediv: rcc::cfgr2::PREDIV1_A,
+        hse_prediv2: rcc::cfgr2::PREDIV2_A,
+        pll2_mul: pac::rcc::cfgr2::PLL2MUL_A,
+        prediv1_src: pac::rcc::cfgr2::PREDIV1SRC_A,
+        pll1_input_clock: pac::rcc::cfgr::PLLSRC_A,
+        pll1_mul: pac::rcc::cfgr::PLLMUL_A,
+        flash_latency: pac::flash::acr::LATENCY_A,
+        ahb_prescaler: pac::rcc::cfgr::HPRE_A,
+        system_clock_src: pac::rcc::cfgr::SW_A,
+        apb1_prescaler: pac::rcc::cfgr::PPRE1_A,
+        apb2_prescaler: pac::rcc::cfgr::PPRE2_A,
+        adc_prescaler: pac::rcc::cfgr::ADCPRE_A,
+        usb_prescaler: pac::rcc::cfgr::OTGFSPRE_A,
+    ) -> Clocks {
+        let rcc = unsafe { &*RCC::ptr() };
+
+        {
+            rcc.cr.modify(|_, w| w.hseon().set_bit());
+            while rcc.cr.read().hserdy().bit_is_clear() {}
+        }
+
+        {
+            // PLL2
+
+            {
+                // disable PLL2 and wait for it to be off
+                rcc.cr.modify(|_, w| w.pll2on().clear_bit());
+                while !rcc.cr.read().pll2rdy().bit_is_clear() {}
+            }
+
+            rcc.cfgr2.modify(|_, w| w.prediv2().variant(hse_prediv2));
+            rcc.cfgr2.modify(|_, w| w.pll2mul().variant(pll2_mul));
+
+            {
+                // enable PLL2 and wait for it to be ready
+                rcc.cr.modify(|_, w| w.pll2on().set_bit());
+                while rcc.cr.read().pll2rdy().bit_is_clear() {}
+            }
+        }
+
+        {
+            // Main PLL
+
+            {
+                // disable Main PLL and wait for it to be off
+                rcc.cr.modify(|_, w| w.pllon().clear_bit());
+                while !rcc.cr.read().pllrdy().bit_is_clear() {}
+            }
+
+            rcc.cfgr2.modify(|_, w| {
+                w.prediv1src()
+                    .variant(prediv1_src)
+                    .prediv1()
+                    .variant(hse_prediv)
+            });
+            rcc.cfgr.modify(|_, w| {
+                w.pllsrc()
+                    .variant(pll1_input_clock)
+                    .pllmul()
+                    .variant(pll1_mul)
+            });
+
+            {
+                // enable Main PLL and wait for it to be ready
+                rcc.cr.modify(|_, w| w.pllon().set_bit());
+                while rcc.cr.read().pllrdy().bit_is_clear() {}
+            }
+        }
+
+        {
+            // Peripheral clocks config
+
+            acr.acr().modify(|_, w| w.latency().variant(flash_latency));
+
+            {
+                // "Set the highest APBx dividers in order to ensure that we do not go through
+                // a non-spec phase whatever we decrease or increase HCLK."
+                rcc.cfgr.modify(|_, w| w.ppre1().div16());
+                rcc.cfgr.modify(|_, w| w.ppre2().div16());
+            }
+
+            rcc.cfgr.modify(|_, w| w.hpre().variant(ahb_prescaler));
+
+            {
+                // set sysclock src and wait for it to take effect
+                rcc.cfgr.modify(|_, w| w.sw().variant(system_clock_src));
+                while rcc.cfgr.read().sws() != system_clock_src {}
+            }
+
+            // set flash latency again (maybe it can change with clocks?)
+            acr.acr().modify(|_, w| w.latency().variant(flash_latency));
+
+            rcc.cfgr.modify(|_, w| {
+                w.ppre1()
+                    .variant(apb1_prescaler)
+                    .ppre2()
+                    .variant(apb2_prescaler)
+                    .adcpre()
+                    .variant(adc_prescaler)
+                    .otgfspre()
+                    .variant(usb_prescaler)
+            });
+        }
+
+        let vco_input_2 = match hse_prediv2 {
+            rcc::cfgr2::PREDIV2_A::DIV1 => hse_frequency / 1,
+            rcc::cfgr2::PREDIV2_A::DIV2 => hse_frequency / 2,
+            rcc::cfgr2::PREDIV2_A::DIV3 => hse_frequency / 3,
+            rcc::cfgr2::PREDIV2_A::DIV4 => hse_frequency / 4,
+            rcc::cfgr2::PREDIV2_A::DIV5 => hse_frequency / 5,
+            rcc::cfgr2::PREDIV2_A::DIV6 => hse_frequency / 6,
+            rcc::cfgr2::PREDIV2_A::DIV7 => hse_frequency / 7,
+            rcc::cfgr2::PREDIV2_A::DIV8 => hse_frequency / 8,
+            rcc::cfgr2::PREDIV2_A::DIV9 => hse_frequency / 9,
+            rcc::cfgr2::PREDIV2_A::DIV10 => hse_frequency / 10,
+            rcc::cfgr2::PREDIV2_A::DIV11 => hse_frequency / 11,
+            rcc::cfgr2::PREDIV2_A::DIV12 => hse_frequency / 12,
+            rcc::cfgr2::PREDIV2_A::DIV13 => hse_frequency / 13,
+            rcc::cfgr2::PREDIV2_A::DIV14 => hse_frequency / 14,
+            rcc::cfgr2::PREDIV2_A::DIV15 => hse_frequency / 15,
+            rcc::cfgr2::PREDIV2_A::DIV16 => hse_frequency / 16,
+        };
+        let pll2_clk = match pll2_mul {
+            pac::rcc::cfgr2::PLL2MUL_A::MUL8 => vco_input_2 * 8,
+            pac::rcc::cfgr2::PLL2MUL_A::MUL9 => vco_input_2 * 9,
+            pac::rcc::cfgr2::PLL2MUL_A::MUL10 => vco_input_2 * 10,
+            pac::rcc::cfgr2::PLL2MUL_A::MUL11 => vco_input_2 * 11,
+            pac::rcc::cfgr2::PLL2MUL_A::MUL12 => vco_input_2 * 12,
+            pac::rcc::cfgr2::PLL2MUL_A::MUL13 => vco_input_2 * 13,
+            pac::rcc::cfgr2::PLL2MUL_A::MUL14 => vco_input_2 * 14,
+            pac::rcc::cfgr2::PLL2MUL_A::MUL16 => vco_input_2 * 16,
+            pac::rcc::cfgr2::PLL2MUL_A::MUL20 => vco_input_2 * 20,
+        };
+        let pll = match pll1_input_clock {
+            pac::rcc::cfgr::PLLSRC_A::HSI_DIV2 => 4_000_000,
+            pac::rcc::cfgr::PLLSRC_A::HSE_DIV_PREDIV => {
+                let prediv1_val = match hse_prediv {
+                    rcc::cfgr2::PREDIV1_A::DIV1 => 1,
+                    rcc::cfgr2::PREDIV1_A::DIV2 => 2,
+                    rcc::cfgr2::PREDIV1_A::DIV3 => 3,
+                    rcc::cfgr2::PREDIV1_A::DIV4 => 4,
+                    rcc::cfgr2::PREDIV1_A::DIV5 => 5,
+                    rcc::cfgr2::PREDIV1_A::DIV6 => 6,
+                    rcc::cfgr2::PREDIV1_A::DIV7 => 7,
+                    rcc::cfgr2::PREDIV1_A::DIV8 => 8,
+                    rcc::cfgr2::PREDIV1_A::DIV9 => 9,
+                    rcc::cfgr2::PREDIV1_A::DIV10 => 10,
+                    rcc::cfgr2::PREDIV1_A::DIV11 => 11,
+                    rcc::cfgr2::PREDIV1_A::DIV12 => 12,
+                    rcc::cfgr2::PREDIV1_A::DIV13 => 13,
+                    rcc::cfgr2::PREDIV1_A::DIV14 => 14,
+                    rcc::cfgr2::PREDIV1_A::DIV15 => 15,
+                    rcc::cfgr2::PREDIV1_A::DIV16 => 16,
+                };
+
+                match prediv1_src {
+                    pac::rcc::cfgr2::PREDIV1SRC_A::HSE => hse_frequency / prediv1_val,
+                    pac::rcc::cfgr2::PREDIV1SRC_A::PLL2 => pll2_clk / prediv1_val,
+                }
+            }
+        };
+        let sysclk = match system_clock_src {
+            pac::rcc::cfgr::SW_A::HSI => 8_000_000,
+            pac::rcc::cfgr::SW_A::HSE => hse_frequency,
+            pac::rcc::cfgr::SW_A::PLL => match pll1_mul {
+                pac::rcc::cfgr::PLLMUL_A::MUL4 => pll * 4,
+                pac::rcc::cfgr::PLLMUL_A::MUL5 => pll * 5,
+                pac::rcc::cfgr::PLLMUL_A::MUL6 => pll * 6,
+                pac::rcc::cfgr::PLLMUL_A::MUL6_5 => (pll * 13) / 2,
+                pac::rcc::cfgr::PLLMUL_A::MUL7 => pll * 7,
+                pac::rcc::cfgr::PLLMUL_A::MUL8 => pll * 8,
+                pac::rcc::cfgr::PLLMUL_A::MUL9 => pll * 9,
+            },
+        };
+        let hclk = match ahb_prescaler {
+            pac::rcc::cfgr::HPRE_A::DIV1 => sysclk / 1,
+            pac::rcc::cfgr::HPRE_A::DIV2 => sysclk / 2,
+            pac::rcc::cfgr::HPRE_A::DIV4 => sysclk / 4,
+            pac::rcc::cfgr::HPRE_A::DIV8 => sysclk / 8,
+            pac::rcc::cfgr::HPRE_A::DIV16 => sysclk / 16,
+            pac::rcc::cfgr::HPRE_A::DIV64 => sysclk / 64,
+            pac::rcc::cfgr::HPRE_A::DIV128 => sysclk / 128,
+            pac::rcc::cfgr::HPRE_A::DIV256 => sysclk / 256,
+            pac::rcc::cfgr::HPRE_A::DIV512 => sysclk / 512,
+        };
+        let apb1_prescaler_val = match apb1_prescaler {
+            pac::rcc::cfgr::PPRE1_A::DIV1 => 1,
+            pac::rcc::cfgr::PPRE1_A::DIV2 => 2,
+            pac::rcc::cfgr::PPRE1_A::DIV4 => 4,
+            pac::rcc::cfgr::PPRE1_A::DIV8 => 8,
+            pac::rcc::cfgr::PPRE1_A::DIV16 => 16,
+        };
+        let pclk1 = hclk / apb1_prescaler_val;
+        let apb2_prescaler_val = match apb2_prescaler {
+            pac::rcc::cfgr::PPRE2_A::DIV1 => 1,
+            pac::rcc::cfgr::PPRE2_A::DIV2 => 2,
+            pac::rcc::cfgr::PPRE2_A::DIV4 => 4,
+            pac::rcc::cfgr::PPRE2_A::DIV8 => 8,
+            pac::rcc::cfgr::PPRE2_A::DIV16 => 16,
+        };
+        let pclk2 = hclk / apb2_prescaler_val;
+        let adcclk = match adc_prescaler {
+            pac::rcc::cfgr::ADCPRE_A::DIV2 => (hclk / apb2_prescaler_val) / 2,
+            pac::rcc::cfgr::ADCPRE_A::DIV4 => (hclk / apb2_prescaler_val) / 4,
+            pac::rcc::cfgr::ADCPRE_A::DIV6 => (hclk / apb2_prescaler_val) / 6,
+            pac::rcc::cfgr::ADCPRE_A::DIV8 => (hclk / apb2_prescaler_val) / 8,
+        };
+
+        Clocks {
+            hclk: Hertz(hclk),
+            pclk1: Hertz(pclk1),
+            pclk2: Hertz(pclk2),
+            ppre1: apb1_prescaler_val as u8,
+            ppre2: apb2_prescaler_val as u8,
+            sysclk: Hertz(sysclk),
+            adcclk: Hertz(adcclk),
+            usbclk_valid: true,
+        }
+    }
 }
 
 pub struct BKP {
@@ -679,7 +905,7 @@ bus! {
     TIM11 => (APB2, tim11en, tim11rst),
 }
 
-#[cfg(any(feature = "stm32f102", feature = "stm32f103"))]
+#[cfg(any(feature = "stm32f102", feature = "stm32f103",))]
 bus! {
     USB => (APB1, usben, usbrst),
 }
