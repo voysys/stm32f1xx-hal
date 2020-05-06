@@ -501,6 +501,8 @@ impl CFGR {
                     .otgfspre()
                     .variant(usb_prescaler)
             });
+
+            rcc.apb2enr.modify(|_, w| w.afioen().set_bit());
         }
 
         let vco_input_2 = match hse_prediv2 {
