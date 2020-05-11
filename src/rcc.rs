@@ -402,6 +402,7 @@ impl CFGR {
         hse_prediv: rcc::cfgr2::PREDIV1_A,
         hse_prediv2: rcc::cfgr2::PREDIV2_A,
         pll2_mul: pac::rcc::cfgr2::PLL2MUL_A,
+        pll3_mul: pac::rcc::cfgr2::PLL3MUL_A,
         prediv1_src: pac::rcc::cfgr2::PREDIV1SRC_A,
         pll1_input_clock: pac::rcc::cfgr::PLLSRC_A,
         pll1_mul: pac::rcc::cfgr::PLLMUL_A,
@@ -436,6 +437,24 @@ impl CFGR {
                 // enable PLL2 and wait for it to be ready
                 rcc.cr.modify(|_, w| w.pll2on().set_bit());
                 while rcc.cr.read().pll2rdy().bit_is_clear() {}
+            }
+        }
+
+        {
+            // PLL3
+
+            {
+                // disable PLL3 and wait for it to be off
+                rcc.cr.modify(|_, w| w.pll3on().clear_bit());
+                while !rcc.cr.read().pll3rdy().bit_is_clear() {}
+            }
+
+            rcc.cfgr2.modify(|_, w| w.pll3mul().variant(pll3_mul));
+
+            {
+                // enable PLL3 and wait for it to be ready
+                rcc.cr.modify(|_, w| w.pll3on().set_bit());
+                while rcc.cr.read().pll3rdy().bit_is_clear() {}
             }
         }
 
@@ -502,7 +521,36 @@ impl CFGR {
                     .variant(usb_prescaler)
             });
 
-            rcc.apb2enr.modify(|_, w| w.afioen().set_bit());
+            {
+                // Peripheral clock enable and wait for it to happen
+                rcc.apb2enr.modify(|_, w| w.afioen().enabled());
+                while rcc.apb2enr.read().afioen().is_disabled() {}
+            }
+
+            {
+                // CRC clock enable, and wait for it to happen
+                rcc.ahbenr.modify(|_, w| w.crcen().enabled());
+                while rcc.ahbenr.read().crcen().is_disabled() {}
+            }
+
+            {
+                // Enable DMA2 clock, and wait for it to be ready
+                rcc.ahbenr.modify(|_, w| w.dma2en().enabled());
+                while rcc.ahbenr.read().dma2en().is_disabled() {}
+            }
+
+            {
+                // Ethernet clock enable and wait for it to happen
+                rcc.ahbenr.modify(|_, w| {
+                    w.ethmacen()
+                        .enabled()
+                        .ethmactxen()
+                        .enabled()
+                        .ethmacrxen()
+                        .enabled()
+                });
+                while rcc.ahbenr.read().ethmacen().is_disabled() {}
+            }
         }
 
         let vco_input_2 = match hse_prediv2 {
