@@ -21,6 +21,8 @@ nb = "0.1.2"
 cortex-m-rt = "0.6.8"
 as-slice = "0.1"
 
+# !!! TEMP UNTIL NEW VERSION IS RELEASED !!! 
+# !!! FIX BEFORE MERGE !!!
 [dependencies.stm32f1]
 git = "https://github.com/stm32-rs/stm32-rs-nightlies"
 

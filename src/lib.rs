@@ -13,10 +13,9 @@
 //!
 //! supported microcontrollers are:
 //!
-//! - stm32f107
-//! - stm32f103
-//! - stm32f101
 //! - stm32f100
+//! - stm32f101
+//! - stm32f103
 //! - stm32f105
 //! - stm32f107
 //!

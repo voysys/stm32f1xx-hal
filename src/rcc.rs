@@ -1,15 +1,13 @@
 //! # Reset & Control Clock
 
-use crate::pac::GPIOA;
 use cast::u32;
 use core::cmp;
 
+use crate::backup_domain::BackupDomain;
 use crate::flash::ACR;
 use crate::pac;
 use crate::pac::{rcc, PWR, RCC};
 use crate::time::Hertz;
-
-use crate::backup_domain::BackupDomain;
 
 /// Extension trait that constrains the `RCC` peripheral
 pub trait RccExt {
