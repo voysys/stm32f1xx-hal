@@ -144,7 +144,7 @@ macro_rules! dma {
                         ///
                         /// `inc` indicates whether the address will be incremented after every byte transfer
                         pub fn set_peripheral_address(&mut self, address: u32, inc: bool) {
-                            self.ch().par.write(|w| w.pa().bits(address) );
+                            unsafe { self.ch().par.write(|w| w.pa().bits(address) ) };
                             self.ch().cr.modify(|_, w| w.pinc().bit(inc) );
                         }
 
@@ -152,7 +152,7 @@ macro_rules! dma {
                         ///
                         /// `inc` indicates whether the address will be incremented after every byte transfer
                         pub fn set_memory_address(&mut self, address: u32, inc: bool) {
-                            self.ch().mar.write(|w| w.ma().bits(address) );
+                            unsafe { self.ch().mar.write(|w| w.ma().bits(address) ) };
                             self.ch().cr.modify(|_, w| w.minc().bit(inc) );
                         }
 
